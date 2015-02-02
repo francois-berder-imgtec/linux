@@ -50,3 +50,8 @@ config SND_SOC_IMG_PISTACHIO_INTERNAL_DAC
 	help
 	  Say Y or M if you want to add support for Pistachio internal DAC
 	  driver for Imagination Technologies Pistachio internal DAC device.
+
+
+config SND_SOC_IMG_PISTACHIO_EVENT_TIMER
+	tristate "Support for Pistachio SoC Event Timer Driver"
+	depends on SND_SOC_IMG
