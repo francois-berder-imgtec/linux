@@ -4,6 +4,7 @@
 
 obj-y				+= bcm/
 obj-$(CONFIG_ARCH_DOVE)		+= dove/
+obj-$(CONFIG_SOC_IMG)		+= img/
 obj-$(CONFIG_MACH_DOVE)		+= dove/
 obj-y				+= fsl/
 obj-$(CONFIG_ARCH_MEDIATEK)	+= mediatek/
