@@ -177,7 +177,7 @@ out_free:
 out:
 	SetPageUptodate(page);
 	ClearPageError(page);
-	flush_dcache_page(page);
+	flush_kernel_dcache_page(page);
 	kunmap(page);
 	return 0;
 
@@ -185,7 +185,7 @@ error:
 	kfree(dn);
 	ClearPageUptodate(page);
 	SetPageError(page);
-	flush_dcache_page(page);
+	flush_kernel_dcache_page(page);
 	kunmap(page);
 	return err;
 }
@@ -688,7 +688,7 @@ out_hole:
 
 	SetPageUptodate(page);
 	ClearPageError(page);
-	flush_dcache_page(page);
+	flush_kernel_dcache_page(page);
 	kunmap(page);
 	*n = nn;
 	return 0;
@@ -696,7 +696,7 @@ out_hole:
 out_err:
 	ClearPageUptodate(page);
 	SetPageError(page);
-	flush_dcache_page(page);
+	flush_kernel_dcache_page(page);
 	kunmap(page);
 	ubifs_err(c, "bad data node (block %u, inode %lu)",
 		  page_block, inode->i_ino);
@@ -1047,7 +1047,7 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 	 */
 	kaddr = kmap_atomic(page);
 	memset(kaddr + len, 0, PAGE_SIZE - len);
-	flush_dcache_page(page);
+	flush_kernel_dcache_page(page);
 	kunmap_atomic(kaddr);
 
 	if (i_size > synced_i_size) {
