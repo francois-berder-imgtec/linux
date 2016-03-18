@@ -459,6 +459,11 @@ void dwc2_hc_halt(struct dwc2_hsotg *hsotg, struct dwc2_host_chan *chan,
 void dwc2_hc_start_transfer_ddma(struct dwc2_hsotg *hsotg,
 				 struct dwc2_host_chan *chan);
 
+static inline int dwc2_is_connected(struct dwc2_hsotg *hsotg)
+{
+	 return (readl(hsotg->regs + HPRT0) & HPRT0_CONNSTS) == 1;
+}
+
 /*
  * Reads HPRT0 in preparation to modify. It keeps the WC bits 0 so that if they
  * are read as 1, they won't clear when written back.
