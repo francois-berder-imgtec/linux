@@ -173,10 +173,21 @@ static int img_prl_out_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 	return 0;
 }
 
+static int img_prl_out_start_at_abort(struct snd_pcm_substream *substream,
+		struct snd_soc_dai *cpu_dai)
+{
+	struct img_prl_out *prl = snd_soc_dai_get_drvdata(cpu_dai);
+
+	img_prl_out_reset(prl);
+
+	return 0;
+}
+
 static const struct snd_soc_dai_ops img_prl_out_dai_ops = {
 	.trigger = img_prl_out_trigger,
 	.hw_params = img_prl_out_hw_params,
-	.set_fmt = img_prl_out_set_fmt
+	.set_fmt = img_prl_out_set_fmt,
+	.start_at_abort = img_prl_out_start_at_abort
 };
 
 static int img_prl_out_dai_probe(struct snd_soc_dai *dai)
