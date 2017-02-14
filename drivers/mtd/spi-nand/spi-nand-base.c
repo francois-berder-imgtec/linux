@@ -22,7 +22,6 @@
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/spi-nand.h>
 #include <linux/of_platform.h>
-#include <linux/of_mtd.h>
 #include <linux/slab.h>
 
 /* Registers common to all devices */
@@ -334,7 +333,8 @@ static void spi_nand_read_buf(struct mtd_info *mtd, u8 *buf, int len)
 }
 
 static int spi_nand_write_page_hwecc(struct mtd_info *mtd,
-		struct nand_chip *chip, const uint8_t *buf, int oob_required)
+		struct nand_chip *chip, const uint8_t *buf, int oob_required,
+		int page)
 {
 	chip->write_buf(mtd, buf, mtd->writesize);
 	chip->write_buf(mtd, chip->oob_poi, mtd->oobsize);
@@ -463,7 +463,6 @@ int spi_nand_check(struct spi_nand *snand)
 int spi_nand_register(struct spi_nand *snand, struct nand_flash_dev *flash_ids)
 {
 	struct nand_chip *chip = &snand->nand_chip;
-	struct mtd_part_parser_data ppdata = {};
 	struct mtd_info *mtd = &snand->mtd;
 	struct device_node *np = snand->dev->of_node;
 	const char __maybe_unused *of_mtd_name = NULL;
@@ -488,7 +487,7 @@ int spi_nand_register(struct spi_nand *snand, struct nand_flash_dev *flash_ids)
 	chip->ecc.write_page	= spi_nand_write_page_hwecc;
 	chip->ecc.mode		= NAND_ECC_HW;
 
-	if (of_get_nand_on_flash_bbt(np))
+	if (of_property_read_bool(np, "nand-on-flash-bbt"))
 		chip->bbt_options |= NAND_BBT_USE_FLASH | NAND_BBT_NO_OOB;
 
 #ifdef CONFIG_MTD_OF_PARTS
@@ -550,8 +549,7 @@ int spi_nand_register(struct spi_nand *snand, struct nand_flash_dev *flash_ids)
 	if (ret)
 		return ret;
 
-	ppdata.of_node = np;
-	return mtd_device_parse_register(mtd, NULL, &ppdata, NULL, 0);
+	return mtd_device_parse_register(mtd, NULL, NULL, NULL, 0);
 }
 EXPORT_SYMBOL_GPL(spi_nand_register);
 
