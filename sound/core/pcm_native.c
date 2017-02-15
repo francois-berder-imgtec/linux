@@ -1075,6 +1075,185 @@ static const struct action_ops snd_pcm_action_start = {
 	.post_action = snd_pcm_post_start
 };
 
+void snd_pcm_start_at_cleanup(struct snd_pcm_substream *substream)
+{
+	substream->start_at_pending = 0;
+	wake_up(&substream->start_at_wait);
+}
+EXPORT_SYMBOL_GPL(snd_pcm_start_at_cleanup);
+
+void snd_pcm_start_at_trigger(struct snd_pcm_substream *substream)
+{
+	snd_pcm_stream_lock(substream);
+
+	if(substream->runtime->status->state == SNDRV_PCM_STATE_STARTING)
+		if(!snd_pcm_do_start(substream, SNDRV_PCM_STATE_RUNNING))
+			snd_pcm_post_start(substream, SNDRV_PCM_STATE_RUNNING);
+
+	snd_pcm_start_at_cleanup(substream);
+
+	snd_pcm_stream_unlock(substream);
+}
+EXPORT_SYMBOL_GPL(snd_pcm_start_at_trigger);
+
+#ifdef CONFIG_HIGH_RES_TIMERS
+static enum hrtimer_restart snd_pcm_do_start_time(struct hrtimer *timer)
+{
+	struct snd_pcm_substream *substream;
+
+	substream = container_of(timer, struct snd_pcm_substream,
+					start_at_timer);
+
+	snd_pcm_start_at_trigger(substream);
+
+	return HRTIMER_NORESTART;
+}
+#endif
+
+static int snd_pcm_startat_system(struct snd_pcm_substream *substream,
+	int clock_type, const struct timespec *start_time)
+{
+#ifdef CONFIG_HIGH_RES_TIMERS
+	struct timespec now;
+	clockid_t clock;
+
+	switch (clock_type) {
+	case SNDRV_PCM_TSTAMP_TYPE_GETTIMEOFDAY:
+		clock = CLOCK_REALTIME;
+		getnstimeofday(&now);
+		break;
+	case SNDRV_PCM_TSTAMP_TYPE_MONOTONIC:
+		clock = CLOCK_MONOTONIC;
+		ktime_get_ts(&now);
+		break;
+	default: /* unsupported clocks bounce off */
+		return -ENOSYS;
+	}
+
+	/* Check if start_time is in the past */
+	if (timespec_compare(&now, start_time) >= 0)
+		return -ETIME;
+
+	hrtimer_init(&substream->start_at_timer, clock, HRTIMER_MODE_ABS);
+	substream->start_at_timer.function = snd_pcm_do_start_time;
+
+	hrtimer_start(&substream->start_at_timer,
+			timespec_to_ktime(*start_time), HRTIMER_MODE_ABS);
+
+	return 0;
+#else
+	return -ENOSYS;
+#endif
+}
+
+static void snd_pcm_startat_system_cancel(struct snd_pcm_substream *substream)
+{
+#ifdef CONFIG_HIGH_RES_TIMERS
+	if(hrtimer_try_to_cancel(&substream->start_at_timer) == 1)
+		snd_pcm_start_at_cleanup(substream);
+#endif
+}
+
+static int snd_pcm_startat_audio(struct snd_pcm_substream *substream,
+	int clock_type, const struct timespec *start_time)
+{
+	if (substream->ops->start_at)
+		return substream->ops->start_at(substream, clock_type,
+			start_time);
+	else
+		return -ENOSYS;
+}
+
+static void snd_pcm_startat_audio_cancel(struct snd_pcm_substream *substream)
+{
+	if (substream->ops->start_at_abort)
+		substream->ops->start_at_abort(substream);
+}
+
+static int snd_pcm_start_at(struct snd_pcm_substream *substream,
+	struct snd_startat *start_at)
+{
+	int ret;
+
+	if (!timespec_valid(&start_at->start_time))
+		return -EINVAL;
+
+	snd_pcm_stream_lock(substream);
+
+	if(substream->start_at_pending) {
+		ret = -EBUSY;
+		goto end;
+	}
+
+	ret = snd_pcm_pre_start(substream, SNDRV_PCM_STATE_PREPARED);
+	if (ret < 0)
+		goto end;
+
+	switch (start_at->clock_class) {
+	case SNDRV_PCM_CLOCK_CLASS_SYSTEM:
+		ret = snd_pcm_startat_system(substream,
+			start_at->clock_type,
+			&start_at->start_time);
+		break;
+	case SNDRV_PCM_CLOCK_CLASS_AUDIO:
+		ret = snd_pcm_startat_audio(substream,
+			start_at->clock_type,
+			&start_at->start_time);
+		if(ret)
+			snd_pcm_startat_audio_cancel(substream);
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
+	if (!ret) {
+		substream->runtime->status->state = SNDRV_PCM_STATE_STARTING;
+		substream->start_at_pending = true;
+		substream->start_at_clock_class = start_at->clock_class;
+	}
+
+end:
+	snd_pcm_stream_unlock(substream);
+	return ret;
+}
+
+static void snd_pcm_startat_cancel(struct snd_pcm_substream *substream)
+{
+	struct snd_pcm_runtime *runtime = substream->runtime;
+
+	if (runtime->status->state != SNDRV_PCM_STATE_STARTING)
+		return;
+
+	switch (substream->start_at_clock_class) {
+	case SNDRV_PCM_CLOCK_CLASS_SYSTEM:
+		snd_pcm_startat_system_cancel(substream);
+		break;
+	case SNDRV_PCM_CLOCK_CLASS_AUDIO:
+		snd_pcm_startat_audio_cancel(substream);
+		break;
+	default:
+		return;
+	}
+
+	runtime->status->state = SNDRV_PCM_STATE_SETUP;
+
+	wait_event_cmd(substream->start_at_wait,
+			!substream->start_at_pending,
+			snd_pcm_stream_unlock(substream),
+			snd_pcm_stream_lock(substream));
+}
+
+int snd_pcm_start_at_user(struct snd_pcm_substream *substream,
+	struct snd_startat __user *_start_at_user)
+{
+	struct snd_startat start_at;
+
+	if (copy_from_user(&start_at, _start_at_user, sizeof(start_at)))
+		return -EFAULT;
+
+	return snd_pcm_start_at(substream, &start_at);
+}
+
 /**
  * snd_pcm_start - start all linked streams
  * @substream: the PCM substream instance
