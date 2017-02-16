@@ -238,6 +238,18 @@
 	status = "okay";
 
 	mac-address = [0123456789AB];
+
+	phy-handle = <&phy0>;
+	mdio0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwmac-mdio";
+		phy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-id0022.1560";
+			micrel,led-mode = <0>;
+			reg = <0>;
+		};
+	};
 };
 
 &pin_enet {

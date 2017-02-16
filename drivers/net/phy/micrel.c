@@ -22,6 +22,7 @@
  *		Switch : ksz8873, ksz886x
  */
 
+#define DEBUG
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/phy.h>
@@ -160,7 +161,7 @@ static int kszphy_config_intr(struct phy_device *phydev)
 	const struct kszphy_type *type = phydev->drv->driver_data;
 	int temp;
 	u16 mask;
-
+    printk(KERN_ERR "micrel: kszphy_config_intr\n");
 	if (type && type->interrupt_level_mask)
 		mask = type->interrupt_level_mask;
 	else
@@ -185,7 +186,7 @@ static int kszphy_config_intr(struct phy_device *phydev)
 static int kszphy_rmii_clk_sel(struct phy_device *phydev, bool val)
 {
 	int ctrl;
-
+    printk(KERN_ERR "micrel: kszphy_rmii_clk_sel\n");
 	ctrl = phy_read(phydev, MII_KSZPHY_CTRL);
 	if (ctrl < 0)
 		return ctrl;
@@ -201,6 +202,7 @@ static int kszphy_rmii_clk_sel(struct phy_device *phydev, bool val)
 static int kszphy_setup_led(struct phy_device *phydev, u32 reg, int val)
 {
 	int rc, temp, shift;
+    printk(KERN_ERR "micrel: kszphy_setup_led\n");
 
 	switch (reg) {
 	case MII_KSZPHY_CTRL_1:
@@ -235,6 +237,7 @@ out:
 static int kszphy_broadcast_disable(struct phy_device *phydev)
 {
 	int ret;
+    printk(KERN_ERR "micrel: kszphy_broadcast_disable\n");
 
 	ret = phy_read(phydev, MII_KSZPHY_OMSO);
 	if (ret < 0)
@@ -273,7 +276,7 @@ static int kszphy_config_init(struct phy_device *phydev)
 	struct kszphy_priv *priv = phydev->priv;
 	const struct kszphy_type *type;
 	int ret;
-
+    printk(KERN_ERR "micrel: kszphy_config_init\n");
 	if (!priv)
 		return 0;
 
@@ -731,7 +734,7 @@ static int kszphy_probe(struct phy_device *phydev)
 	struct kszphy_priv *priv;
 	struct clk *clk;
 	int ret;
-
+    printk(KERN_ERR "micrel: kszphy_probe\n");
 	priv = devm_kzalloc(&phydev->mdio.dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
